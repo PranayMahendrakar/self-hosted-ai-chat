@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self-Hosted AI Chat | WebAssembly LLM</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">🧠</span>
+          <span class="logo-text">LocalAI Chat</span>
+        </div>
+        <button class="new-chat-btn" id="newChatBtn">+ New Chat</button>
+      </div>
+      <div class="model-section">
+        <h3>Model</h3>
+        <div class="model-info" id="modelInfo">
+          <span class="model-name" id="modelName">No model loaded</span>
+          <span class="model-badge" id="modelBadge">Offline</span>
+        </div>
+        <div class="model-selector">
+          <label for="modelSelect">Select Model:</label>
+          <select id="modelSelect">
+            <option value="">-- Choose a model --</option>
+            <optgroup label="TinyLlama (637 MB)">
+              <option value="https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf">TinyLlama 1.1B Q4_K_M</option>
+            </optgroup>
+            <optgroup label="Phi-2 (~1.5 GB)">
+              <option value="https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf">Phi-2 Q4_K_M</option>
+            </optgroup>
+            <optgroup label="Mistral 7B (~4 GB)">
+              <option value="https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf">Mistral 7B Instruct Q4_K_M</option>
+            </optgroup>
+          </select>
+          <div class="or-divider">or</div>
+          <label for="customModelUrl">Custom GGUF URL:</label>
+          <input type="url" id="customModelUrl" placeholder="https://...model.gguf" />
+          <label for="localModelFile">Upload Local File:</label>
+          <input type="file" id="localModelFile" accept=".gguf,.bin" />
+          <button class="load-model-btn" id="loadModelBtn">Load Model</button>
+        </div>
+      </div>
+      <div class="chat-history-section">
+        <h3>Chat History</h3>
+        <div class="chat-history" id="chatHistory"></div>
+      </div>
+      <div class="sidebar-footer">
+        <a href="https://github.com/PranayMahendrakar/self-hosted-ai-chat" target="_blank" class="github-link">
+          <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="chat-main">
+      <header class="chat-header">
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        <div class="header-center">
+          <h1>Self-Hosted AI Chat</h1>
+          <span class="header-subtitle">100% Local • No API Keys • WebAssembly Inference</span>
+        </div>
+        <div class="header-status">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Idle</span>
+        </div>
+      </header>
+
+      <!-- Model Load Progress -->
+      <div class="model-load-area" id="modelLoadArea" style="display:none;">
+        <div class="load-card">
+          <div class="load-icon">⚙️</div>
+          <h2 id="loadTitle">Loading Model...</h2>
+          <p id="loadSubtitle">This may take a few minutes depending on your connection and hardware.</p>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="load-stats">
+            <span id="loadedBytes">0 MB</span>
+            <span id="loadPercent">0%</span>
+            <span id="totalBytes">? MB</span>
+          </div>
+          <button class="cancel-btn" id="cancelLoadBtn">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Welcome Screen -->
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-content">
+          <div class="welcome-icon">🤖</div>
+          <h2>Welcome to LocalAI Chat</h2>
+          <p>An AI chatbot that runs <strong>entirely in your browser</strong> — no servers, no API keys, no data leaving your device.</p>
+          <div class="architecture-card">
+            <h3>🏗️ Architecture</h3>
+            <div class="arch-flow">
+              <div class="arch-step">
+                <span class="arch-icon">🌐</span>
+                <span>Browser</span>
+              </div>
+              <div class="arch-arrow">↓</div>
+              <div class="arch-step">
+                <span class="arch-icon">⚙️</span>
+                <span>WebAssembly<br/>llama.cpp</span>
+              </div>
+              <div class="arch-arrow">↓</div>
+              <div class="arch-step">
+                <span class="arch-icon">🧠</span>
+                <span>Local LLaMA<br/>Model (.gguf)</span>
+              </div>
+            </div>
+          </div>
+          <div class="feature-grid">
+            <div class="feature-item">✅ No Backend</div>
+            <div class="feature-item">✅ No API Keys</div>
+            <div class="feature-item">✅ 100% Private</div>
+            <div class="feature-item">✅ Open Source</div>
+            <div class="feature-item">✅ Offline Capable</div>
+            <div class="feature-item">✅ Free Forever</div>
+          </div>
+          <div class="getting-started">
+            <h3>🚀 Getting Started</h3>
+            <ol>
+              <li>Select a model from the sidebar (TinyLlama recommended for first try)</li>
+              <li>Click <strong>"Load Model"</strong> and wait for it to download</li>
+              <li>Start chatting! Everything runs locally in your browser.</li>
+            </ol>
+          </div>
+          <button class="quick-load-btn" id="quickLoadBtn">⚡ Quick Start with TinyLlama 1.1B</button>
+        </div>
+      </div>
+
+      <!-- Messages Area -->
+      <div class="messages-area" id="messagesArea" style="display:none;">
+        <div class="messages-container" id="messagesContainer"></div>
+      </div>
+
+      <!-- Input Area -->
+      <footer class="input-area" id="inputArea" style="display:none;">
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea
+              id="messageInput"
+              placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+              rows="1"
+              maxlength="4096"
+            ></textarea>
+            <div class="input-actions">
+              <span class="char-count" id="charCount">0/4096</span>
+            </div>
+          </div>
+          <button class="send-btn" id="sendBtn" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+          <button class="stop-btn" id="stopBtn" style="display:none;">⏹ Stop</button>
+        </div>
+        <div class="input-info">
+          <span id="modelNameFooter">No model loaded</span>
+          <span class="separator">•</span>
+          <span>WebAssembly Inference</span>
+          <span class="separator">•</span>
+          <span id="inferenceStats">Ready</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
